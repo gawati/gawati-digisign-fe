@@ -1,0 +1,14 @@
+{"docTypes": [
+    "amendmentList",
+    "officialGazette", 
+    "documentCollection", 
+    "act", 
+    "bill", 
+    "debateReport", 
+    "debate",
+    "statement",
+    "amendment",
+    "judgment",
+    "portion",
+    "doc" 
+]}

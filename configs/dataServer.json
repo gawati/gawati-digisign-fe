@@ -1,0 +1,14 @@
+{
+    "editor-fe" : {
+        "serviceEndPoint" : "http://localhost/",
+        "api": {
+            "loadPkg": { 
+                "url": "/gwc/pkg/load",
+                "method": "post"
+            },
+            "uploadPkg": {
+                "url": "/gwc/pkg/upload"
+            }
+        }
+    }
+}

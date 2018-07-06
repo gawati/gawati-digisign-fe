@@ -1,0 +1,1 @@
+# Digital Sign Frontend Component for Gawati Package Sign
