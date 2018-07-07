@@ -18,7 +18,8 @@ dsAPIs["/sign"] = {
     method: "post",
     stack: [
         ds.receiveSubmitData,
-        ds.loadPkgForIri,  
+        ds.loadPkgForIri,
+        ds.processPkg,
         ds.returnResponse
     ]
 };
