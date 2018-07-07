@@ -1,6 +1,5 @@
 const express = require("express");
 const path = require("path");
-const rabbit = require("./queues");
 const routes = require("./apiroutes");
 var cookieParser = require("cookie-parser");
 var bodyParser = require("body-parser");

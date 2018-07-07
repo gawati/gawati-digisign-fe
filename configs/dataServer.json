@@ -1,6 +1,6 @@
 {
     "editor-fe" : {
-        "serviceEndPoint" : "http://localhost/",
+        "serviceEndPoint" : "http://localhost",
         "api": {
             "loadPkg": { 
                 "url": "/gwc/pkg/load",

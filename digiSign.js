@@ -1,4 +1,9 @@
 const axios = require("axios");
+const fs = require("fs-extra");
+const path = require("path");
+const servicehelper = require("./utils/ServiceHelper");
+const generalhelper = require("./utils/GeneralHelper");
+const constants = require("./constants");
 
 /**
  * Receives the Form posting, not suitable for multipart form data
@@ -13,6 +18,10 @@ const receiveSubmitData = (req, res, next) =>  {
     next();
 };
 
+const processPkg = (req, res, next) => {
+
+}
+
 /**
  * Load pkg for IRI
  * @param {*} req 
@@ -21,9 +30,38 @@ const receiveSubmitData = (req, res, next) =>  {
  */
 const loadPkgForIri = (req, res, next) =>  {
     console.log(" IN: loadPkgForIri");
-    console.log(res.locals.formObject);
-    res.locals.returnResponse = "Got IRI"; 
-    next();
+    let {iri} = res.locals.formObject;
+    iri = iri.startsWith("/") ? iri : `/${iri}`;
+
+    const loadPkgApi = servicehelper.getApi("editor-fe", "loadPkg");
+    const {url, method} = loadPkgApi;
+
+    axios({
+        method: method,
+        url: url,
+        data: {"data": {"iri": iri}},
+        responseType: 'stream'
+    }).then(
+        (response) => {
+            const filename = generalhelper.fnameFromResponse(response);
+            const opFname = path.join(constants.TMP_AKN_FOLDER(), filename);
+            response.data.pipe(fs.createWriteStream(opFname));
+
+            response.data.on('end', () => {
+                res.locals.returnResponse = {"status": "success"};
+                next();
+            });
+
+            response.data.on('error', () => {
+                res.locals.returnResponse = {"status": "error"};
+                next();
+            });
+        }
+    ).catch((err) => {
+            console.log(err);
+            next();
+        }
+    );
 };
 
 /**
@@ -46,5 +84,6 @@ const returnResponse = (req, res) => {
  */
 module.exports = {
     receiveSubmitData: receiveSubmitData,
+    loadPkgForIri:loadPkgForIri,
     returnResponse: returnResponse
 };
