@@ -16,6 +16,19 @@ const fnameFromResponse = (response) => {
     return filename;
 };
 
+/**
+ * Trims whitespaces between the `Signature` tags in the metadata xml
+ * Note: The space between </Signature> and the root tag must 
+ * also be removed for the Signature to be valid. 
+ * <gwd:package> is assumed to be the root tag.
+ */
+const trimSpaceInSignature = (aknXml) => {
+    return aknXml.replace(/<Signature[^>]*>([\s\S]*?)<\/gwd:package>/, function(match) {
+        return match.replace(/>\s+</g, "><")
+    });
+}
+
 module.exports = {
-    fnameFromResponse: fnameFromResponse
+    fnameFromResponse: fnameFromResponse,
+    trimSpaceInSignature: trimSpaceInSignature
 };

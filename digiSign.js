@@ -1,5 +1,5 @@
 /**
- * Sign and Validate an AKN package
+ * Sign and Validate and AKN package
  * To-Do: 
  * a. Error handling
  */
@@ -220,6 +220,97 @@ const loadPkgForIri = (req, res, next) =>  {
 };
 
 /**
+ * Verify Checksums for each attachment
+ * Parse aknXml to get attachments info
+ * For each attachment, compute checksum 
+ * Verify checksum against the value in <an:embeddedContent>
+ * Returns a map of attachments validity
+ */
+const verifyChecksums = (aknXml, pkgFolder) => {
+    let attValid = true;
+	let doc = new DOMParser().parseFromString(aknXml);
+	let atts = doc.getElementsByTagName("an:embeddedContent");
+	for (let i = 0; i < atts.length; i++) {
+		const attFname = atts[i].getAttribute('file');
+        const attChecksum = atts[i].getAttribute('checksum');
+		const attFpath = path.resolve(constants.TMP_AKN_FOLDER(), pkgFolder, attFname);
+		//To-Do: Make async
+		const checksum = md5File.sync(attFpath);
+        if (checksum !== attChecksum) {
+            attValid[attFname] = false;
+            return attValid;
+        }
+	}
+	return attValid;
+}
+
+/**
+ * Validate the metadata xml
+ */
+const validateMeta = (docPath) => {
+    console.log(" IN: validateMeta");
+    const validateApi = servicehelper.getApi("package-sign", "validate");
+    const {url, method} = validateApi;
+
+    //To-Do: Get this from DB
+    const pubPath = constants.SIGN_KEYS_PATH["public"];
+
+    let data = new FormData();
+    data.append('sig_file', fs.createReadStream(docPath));
+    data.append('public_key', fs.createReadStream(pubPath));
+
+    return axios({
+        method: method,
+        url: url,
+        data: data,
+        headers: data.getHeaders()
+    });
+}
+
+/**
+ * Validate pkg.
+ * For each attachment in the package, compute and verify checksum within
+ * the metadata xml.
+ * Validate the signature of the metadata xml.
+ * @param {*} req 
+ * @param {*} res 
+ * @param {*} next 
+ */
+const validatePkg = (req, res, next) => {
+    console.log(" IN: validatePkg");
+    const pkgFolder = path.basename(res.locals.zipPath, '.zip');
+    const dest = constants.TMP_AKN_FOLDER();
+	const docPath = getDocPath(res.locals);
+
+    let valid = {"attValid": false, "metaValid": false};
+
+    unzip(res.locals.zipPath, path.resolve(dest))
+    .then((result) => {
+		return filehelper.readFile(docPath);
+    })
+	.then((aknXml) => {
+		valid["attValid"] = verifyChecksums(aknXml, pkgFolder);
+
+        //Important: Formatting space within the singature tag must be removed
+        aknTrimmed = generalhelper.trimSpaceInSignature(aknXml);
+        return filehelper.writeFile(aknTrimmed, docPath);
+	})
+    .then(result => validateMeta(docPath))
+    .then(response => {
+        if ('valid' in response.data) {
+            valid["metaValid"] = response.data['valid'];
+        }
+        res.locals.returnResponse = valid;
+        next();
+    })
+	.catch((err) => {
+        res.locals.returnResponse = {"error": "Error while validating."};
+		console.log(err);
+		next();
+	})
+}
+
+/**
  * 
  * @param {*} req 
  * @param {*} res 
@@ -243,5 +334,6 @@ module.exports = {
 	processPkg: processPkg,
     signPkg: signPkg,
     uploadSignedPkg: uploadSignedPkg,
+    validatePkg: validatePkg,
     returnResponse: returnResponse
 };
