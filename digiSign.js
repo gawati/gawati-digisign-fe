@@ -1,8 +1,15 @@
+/**
+ * Sign and Validate an AKN package
+ * To-Do: 
+ * a. Error handling
+ */
+
 const axios = require("axios");
 const fs = require("fs-extra");
 const path = require("path");
 const extract = require("extract-zip");
 const md5File = require('md5-file');
+const FormData = require('form-data');
 const DOMParser = require('xmldom').DOMParser;
 const XMLSerializer = require('xmldom').XMLSerializer;
 const servicehelper = require("./utils/ServiceHelper");
@@ -56,16 +63,102 @@ const injectChecksums = (aknXml, pkgFolder) => {
 	return new XMLSerializer().serializeToString(doc);
 }
 
+const getDocPath = (locals) => {
+    const pkgFolder = path.basename(locals.zipPath, '.zip');
+	//XML doc name and path
+	let {iri} = locals.formObject;
+	const docName = urihelper.fileNameFromIRI(iri, "xml");
+	const docPath = path.resolve(constants.TMP_AKN_FOLDER(), pkgFolder, docName);
+    return docPath;
+}
+
+/**
+ * Upload the signed pkg.
+ * Save the signed metadata xml and public key in the database.
+ * @param {*} req 
+ * @param {*} res 
+ * @param {*} next 
+ */
+const uploadSignedPkg = (req, res, next) => {
+    console.log(" IN: uploadSignedPkg");
+    const uploadPkgApi = servicehelper.getApi("editor-fe", "uploadPkg");
+    const {url, method} = uploadPkgApi;
+
+    const docPath = getDocPath(res.locals);
+    const pubPath = constants.SIGN_KEYS_PATH["public"];
+
+    let data = new FormData();
+    data.append('iri', res.locals.formObject.iri);
+    data.append('file', fs.createReadStream(docPath));
+    data.append('public_key', fs.createReadStream(pubPath));
+
+    axios({
+        method: method,
+        url: url,
+        data: data,
+        headers: data.getHeaders()
+    }).then(
+        (response) => {
+            res.locals.returnResponse = response.data;
+            next();
+        }
+    ).catch((err) => {
+            console.log(err);
+            next();
+        }
+    );
+
+}
+
+/**
+ * Sign the processed metadata xml
+ * @param {*} req 
+ * @param {*} res 
+ * @param {*} next 
+ */
+const signPkg = (req, res, next) => {
+    console.log(" IN: signPkg");
+    const signApi = servicehelper.getApi("package-sign", "sign");
+    const {url, method} = signApi;
+
+    const docPath = getDocPath(res.locals);
+    const pubPath = constants.SIGN_KEYS_PATH["public"];
+    const priPath = constants.SIGN_KEYS_PATH["private"];
+
+    let data = new FormData();
+    data.append('input_file', fs.createReadStream(docPath));
+    data.append('public_key', fs.createReadStream(pubPath));
+    data.append('private_key', fs.createReadStream(priPath));
+
+    axios({
+        method: method,
+        url: url,
+        data: data,
+        headers: data.getHeaders()
+    }).then(
+        (response) => {
+            filehelper.writeFile(response.data, docPath);
+            next();
+        }
+    ).catch((err) => {
+            console.log(err);
+            next();
+        }
+    );
+}
+
+/**
+ * Process pkg.
+ * For each attachment in the package, compute and inject checksum within
+ * the metadata xml.
+ * @param {*} req 
+ * @param {*} res 
+ * @param {*} next 
+ */
 const processPkg = (req, res, next) => {
     const pkgFolder = path.basename(res.locals.zipPath, '.zip');
     const dest = constants.TMP_AKN_FOLDER();
-
-	//XML doc name and path
-	let {iri} = res.locals.formObject;
-	const docName = urihelper.fileNameFromIRI(iri, "xml");
-
-	//Use resolve to avoid repeated paths in windows.
-	const docPath = path.resolve(constants.TMP_AKN_FOLDER(), pkgFolder, docName);
+	const docPath = getDocPath(res.locals);
 
     unzip(res.locals.zipPath, path.resolve(dest))
     .then((result) => {
@@ -76,7 +169,6 @@ const processPkg = (req, res, next) => {
 		return filehelper.writeFile(newXml, docPath);
 	})
 	.then((result) => {
-		console.log("Now post to /sign");
 		next();
 	})
 	.catch((err) => {
@@ -149,5 +241,7 @@ module.exports = {
     receiveSubmitData: receiveSubmitData,
     loadPkgForIri:loadPkgForIri,
 	processPkg: processPkg,
+    signPkg: signPkg,
+    uploadSignedPkg: uploadSignedPkg,
     returnResponse: returnResponse
 };

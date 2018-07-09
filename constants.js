@@ -7,6 +7,10 @@ const API_PORT = process.env.API_PORT || '8080' ;
 const CONFIG_FOLDER = () => 'configs';
 const TMP_AKN_FOLDER = () => path.join(".", "tmp");
 
+const SIGN_KEYS_PATH = {
+    "public": path.join(".", "sig_keys", "id.public"),
+    "private": path.join(".", "sig_keys", "id.private")
+}
 
 const API_SERVER_BASE = () =>
     API_PROTOCOL + '://' + API_HOST + ":" + API_PORT + '/exist/restxq';
@@ -33,6 +37,7 @@ module.exports = {
     CONFIG_FOLDER: CONFIG_FOLDER,
     API_SERVER_BASE: API_SERVER_BASE,
     TMP_AKN_FOLDER: TMP_AKN_FOLDER,
+    SIGN_KEYS_PATH: SIGN_KEYS_PATH,
     AKN_DOC_TYPES: AKN_DOC_TYPES,
     PROCESS_NAME: PROCESS_NAME
 };

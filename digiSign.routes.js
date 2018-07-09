@@ -20,6 +20,8 @@ dsAPIs["/sign"] = {
         ds.receiveSubmitData,
         ds.loadPkgForIri,
         ds.processPkg,
+        ds.signPkg,
+        ds.uploadSignedPkg,
         ds.returnResponse
     ]
 };

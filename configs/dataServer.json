@@ -7,7 +7,22 @@
                 "method": "post"
             },
             "uploadPkg": {
-                "url": "/gwc/pkg/upload"
+                "url": "/gwc/pkg/upload",
+                "method": "post"
+            }
+        }
+    },
+
+    "package-sign" : {
+        "serviceEndPoint" : "http://localhost:8081",
+        "api": {
+            "sign": { 
+                "url": "/pkgsign/xml/doc/sign",
+                "method": "post"
+            },
+            "validate": {
+                "url": "/pkgsign/xml/doc/validate",
+                "method": "post"
             }
         }
     }
