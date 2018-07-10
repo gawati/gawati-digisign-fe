@@ -253,6 +253,7 @@ const validateMeta = (docPath) => {
     const {url, method} = validateApi;
 
     //To-Do: Get this from DB
+    // const pubPath = docPath.replace("xml", "public");
     const pubPath = constants.SIGN_KEYS_PATH["public"];
 
     let data = new FormData();
