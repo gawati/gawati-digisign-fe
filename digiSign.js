@@ -1,7 +1,5 @@
 /**
  * Sign and Validate and AKN package
- * To-Do: 
- * a. Error handling
  */
 
 const axios = require("axios");
@@ -28,6 +26,16 @@ const unzip = (src, dest) => {
       else resolve(true);
     })
   });
+}
+
+/**
+ * Check if return response status is errored
+ */
+const isError = (returnResponse) => {
+    if (returnResponse && 'status' in returnResponse)
+		return returnResponse.status === 'error';
+	else
+		return false;
 }
 
 /**
@@ -81,33 +89,34 @@ const getDocPath = (locals) => {
  */
 const uploadSignedPkg = (req, res, next) => {
     console.log(" IN: uploadSignedPkg");
-    const uploadPkgApi = servicehelper.getApi("editor-fe", "uploadPkg");
-    const {url, method} = uploadPkgApi;
+    if (!isError(res.locals.returnResponse)) { 
+        const uploadPkgApi = servicehelper.getApi("editor-fe", "uploadPkg");
+        const {url, method} = uploadPkgApi;
 
-    const docPath = getDocPath(res.locals);
-    const pubPath = constants.SIGN_KEYS_PATH["public"];
+        const docPath = getDocPath(res.locals);
+        const pubPath = constants.SIGN_KEYS_PATH["public"];
 
-    let data = new FormData();
-    data.append('iri', res.locals.formObject.iri);
-    data.append('file', fs.createReadStream(docPath));
-    data.append('public_key', fs.createReadStream(pubPath));
+        let data = new FormData();
+        data.append('iri', res.locals.formObject.iri);
+        data.append('file', fs.createReadStream(docPath));
+        data.append('public_key', fs.createReadStream(pubPath));
 
-    axios({
-        method: method,
-        url: url,
-        data: data,
-        headers: data.getHeaders()
-    }).then(
-        (response) => {
+        axios({
+            method: method,
+            url: url,
+            data: data,
+            headers: data.getHeaders()
+        }).then((response) => {
             res.locals.returnResponse = response.data;
             next();
-        }
-    ).catch((err) => {
+        }).catch((err) => {
+            res.locals.returnResponse = {"status": "error", "msg": "Error while uploading the signed IRI package"};
             console.log(err);
             next();
-        }
-    );
-
+        });
+    } else {
+        next();
+    }
 }
 
 /**
@@ -118,33 +127,36 @@ const uploadSignedPkg = (req, res, next) => {
  */
 const signPkg = (req, res, next) => {
     console.log(" IN: signPkg");
-    const signApi = servicehelper.getApi("package-sign", "sign");
-    const {url, method} = signApi;
+    if (!isError(res.locals.returnResponse)) {
+        const signApi = servicehelper.getApi("package-sign", "sign");
+        const {url, method} = signApi;
 
-    const docPath = getDocPath(res.locals);
-    const pubPath = constants.SIGN_KEYS_PATH["public"];
-    const priPath = constants.SIGN_KEYS_PATH["private"];
+        const docPath = getDocPath(res.locals);
+        const pubPath = constants.SIGN_KEYS_PATH["public"];
+        const priPath = constants.SIGN_KEYS_PATH["private"];
 
-    let data = new FormData();
-    data.append('input_file', fs.createReadStream(docPath));
-    data.append('public_key', fs.createReadStream(pubPath));
-    data.append('private_key', fs.createReadStream(priPath));
+        let data = new FormData();
+        data.append('input_file', fs.createReadStream(docPath));
+        data.append('public_key', fs.createReadStream(pubPath));
+        data.append('private_key', fs.createReadStream(priPath));
 
-    axios({
-        method: method,
-        url: url,
-        data: data,
-        headers: data.getHeaders()
-    }).then(
-        (response) => {
-            filehelper.writeFile(response.data, docPath);
-            next();
-        }
-    ).catch((err) => {
+        axios({
+            method: method,
+            url: url,
+            data: data,
+            headers: data.getHeaders()
+        }).then((response) => {
+            return filehelper.writeFile(response.data, docPath);
+        })
+        .then(result => next())
+        .catch((err) => {
+            res.locals.returnResponse = {"status": "error", "msg": "Error while signing the IRI package"};
             console.log(err);
             next();
-        }
-    );
+        });
+    } else {
+        next();
+    }
 }
 
 /**
@@ -156,25 +168,31 @@ const signPkg = (req, res, next) => {
  * @param {*} next 
  */
 const processPkg = (req, res, next) => {
-    const pkgFolder = path.basename(res.locals.zipPath, '.zip');
-    const dest = constants.TMP_AKN_FOLDER();
-	const docPath = getDocPath(res.locals);
+    console.log(" IN: processPkg");
+    if (!isError(res.locals.returnResponse)) {
+        const pkgFolder = path.basename(res.locals.zipPath, '.zip');
+        const dest = constants.TMP_AKN_FOLDER();
+        const docPath = getDocPath(res.locals);
 
-    unzip(res.locals.zipPath, path.resolve(dest))
-    .then((result) => {
-		return filehelper.readFile(docPath);
-    })
-	.then((aknXml) => {
-		newXml = injectChecksums(aknXml, pkgFolder);
-		return filehelper.writeFile(newXml, docPath);
-	})
-	.then((result) => {
-		next();
-	})
-	.catch((err) => {
-		console.log(err);
-		next();
-	})
+        unzip(res.locals.zipPath, path.resolve(dest))
+        .then((result) => {
+            return filehelper.readFile(docPath);
+        })
+        .then((aknXml) => {
+            newXml = injectChecksums(aknXml, pkgFolder);
+            return filehelper.writeFile(newXml, docPath);
+        })
+        .then((result) => {
+            next();
+        })
+        .catch((err) => {
+            res.locals.returnResponse = {"status": "error", "msg": "Error while processing the IRI package"};
+            console.log(err);
+            next();
+        })   
+    } else {
+        next();
+    }
 }
 
 /**
@@ -196,27 +214,31 @@ const loadPkgForIri = (req, res, next) =>  {
         url: url,
         data: {"data": {"iri": iri}},
         responseType: 'stream'
-    }).then(
-        (response) => {
+    }).then((response) => {
+        const contentType = response.headers['content-type'];
+        if (contentType.indexOf('application/json') !== -1) {
+            res.locals.returnResponse = {"status": "error", "msg": "Error while loading the IRI package"};
+            next();
+        } else {
             const filename = generalhelper.fnameFromResponse(response);
             res.locals.zipPath = path.join(constants.TMP_AKN_FOLDER(), filename);
             response.data.pipe(fs.createWriteStream(res.locals.zipPath));
 
             response.data.on('end', () => {
-                res.locals.returnResponse = {"status": "success"};
                 next();
             });
 
             response.data.on('error', () => {
-                res.locals.returnResponse = {"status": "error"};
+                res.locals.returnResponse = {"status": "error", "msg": "Error while unzipping the IRI package"};
                 next();
             });
         }
-    ).catch((err) => {
-            console.log(err);
-            next();
-        }
-    );
+    })
+    .catch((err) => {
+        res.locals.returnResponse = {"status": "error", "msg": "Error while loading the IRI package"};
+        console.log(err);
+        next();
+    });
 };
 
 /**
@@ -252,20 +274,20 @@ const validateMeta = (docPath) => {
     const validateApi = servicehelper.getApi("package-sign", "validate");
     const {url, method} = validateApi;
 
-    //To-Do: Get this from DB
-    // const pubPath = docPath.replace("xml", "public");
-    const pubPath = constants.SIGN_KEYS_PATH["public"];
+    const pubPath = docPath.replace("xml", "public");
+    return filehelper.decodeFile(pubPath, 'base64')
+    .then(result => {
+        let data = new FormData();
+        data.append('sig_file', fs.createReadStream(docPath));
+        data.append('public_key', fs.createReadStream(pubPath));
 
-    let data = new FormData();
-    data.append('sig_file', fs.createReadStream(docPath));
-    data.append('public_key', fs.createReadStream(pubPath));
-
-    return axios({
-        method: method,
-        url: url,
-        data: data,
-        headers: data.getHeaders()
-    });
+        return axios({
+            method: method,
+            url: url,
+            data: data,
+            headers: data.getHeaders()
+        });
+    })
 }
 
 /**
@@ -279,36 +301,40 @@ const validateMeta = (docPath) => {
  */
 const validatePkg = (req, res, next) => {
     console.log(" IN: validatePkg");
-    const pkgFolder = path.basename(res.locals.zipPath, '.zip');
-    const dest = constants.TMP_AKN_FOLDER();
-	const docPath = getDocPath(res.locals);
+    if (!isError(res.locals.returnResponse)) {
+        const pkgFolder = path.basename(res.locals.zipPath, '.zip');
+        const dest = constants.TMP_AKN_FOLDER();
+        const docPath = getDocPath(res.locals);
 
-    let valid = {"attValid": false, "metaValid": false};
+        let valid = {"attValid": false, "metaValid": false};
 
-    unzip(res.locals.zipPath, path.resolve(dest))
-    .then((result) => {
-		return filehelper.readFile(docPath);
-    })
-	.then((aknXml) => {
-		valid["attValid"] = verifyChecksums(aknXml, pkgFolder);
+        unzip(res.locals.zipPath, path.resolve(dest))
+        .then((result) => {
+            return filehelper.readFile(docPath);
+        })
+        .then((aknXml) => {
+            valid["attValid"] = verifyChecksums(aknXml, pkgFolder);
 
-        //Important: Formatting space within the singature tag must be removed
-        aknTrimmed = generalhelper.trimSpaceInSignature(aknXml);
-        return filehelper.writeFile(aknTrimmed, docPath);
-	})
-    .then(result => validateMeta(docPath))
-    .then(response => {
-        if ('valid' in response.data) {
-            valid["metaValid"] = response.data['valid'];
-        }
-        res.locals.returnResponse = valid;
+            //Important: Formatting space within the singature tag must be removed
+            aknTrimmed = generalhelper.trimSpaceInSignature(aknXml);
+            return filehelper.writeFile(aknTrimmed, docPath);
+        })
+        .then(result => validateMeta(docPath))
+        .then(response => {
+            if ('valid' in response.data) {
+                valid["metaValid"] = response.data['valid'];
+            }
+            res.locals.returnResponse = valid;
+            next();
+        })
+        .catch((err) => {
+            res.locals.returnResponse = {"status": "error", "msg": "Error while validating."};
+            console.log(err);
+            next();
+        })
+    } else {
         next();
-    })
-	.catch((err) => {
-        res.locals.returnResponse = {"error": "Error while validating."};
-		console.log(err);
-		next();
-	})
+    }
 }
 
 /**

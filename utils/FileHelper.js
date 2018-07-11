@@ -27,7 +27,25 @@ const writeFile = (data, filename) => {
   });
 }
 
+/**
+ * Decodes an encoded (e.g. base64) file and writes back decoded data 
+ * to the same file.
+ */
+const decodeFile = (path, encoding) => {
+  return new Promise(function(resolve, reject) {
+    readFile(path)
+    .then(data => {
+      fs.writeFile(path, data, encoding, function(err) {
+        if (err) reject(err);
+        else resolve(true);
+      })
+    })
+    .catch(err => reject(err));
+  });
+}
+
 module.exports = {
   readFile: readFile,
-  writeFile: writeFile
+  writeFile: writeFile,
+  decodeFile: decodeFile
 }
